@@ -8,12 +8,14 @@ import java.util.Iterator;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Arrays;
-public class Utils{
+import java.util.List;
+public class Utils<T extends Utils.Entity<T>>{
+
     boolean canRend = false;
     OrthographicCamera camera;
     ShapeRenderer rend;
-    Quadtree master;
-    LinkedList<Entity> points = new LinkedList<Entity>();
+    Quadtree<T> master;
+    LinkedList<T> points = new LinkedList<T>();
     int max;
     Vec  tl = N(), br = N(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
     
@@ -31,7 +33,7 @@ public class Utils{
         this.rend = rend;
         this.canRend = true;
         this.max = max;
-        master = new Quadtree(null, tl, br, max);
+        master = new Quadtree<T>(null, tl, br, max, this);
     }
 
     public Utils() {
@@ -164,20 +166,20 @@ public class Utils{
 
 //shapes
     public class ConvexHull {
-        Entity[] hull;
-        public ConvexHull(Entity[] shape) {
+        List<T> hull;
+        public ConvexHull(T[] shape) {
             this.hull = update(shape);
         }
 
         public void DrawHull(Color color) {
-            if (this.hull == null || this.hull.length < 3) return;
+            if (this.hull == null || this.hull.size() < 3) return;
             rend.setProjectionMatrix(camera.combined);
             rend.begin(ShapeRenderer.ShapeType.Line);
             rend.setColor(color);
-            for (int i = 0; i < this.hull.length; i++) {
-                int j = (i == 0) ? this.hull.length -1 : i - 1;
-                Entity p1 = this.hull[i];
-                Entity p2 = this.hull[j];
+            for (int i = 0; i < this.hull.size(); i++) {
+                int j = (i == 0) ? this.hull.size() -1 : i - 1;
+                T p1 = this.hull.get(i);
+                T p2 = this.hull.get(j);
                 rend.line((float)p1.getPos().x, (float)p1.getPos().y, (float)p2.getPos().x, (float)p2.getPos().y);
                 
             }
@@ -185,15 +187,15 @@ public class Utils{
 
         public void drawHullNormals(ShapeRenderer renderer) {
             Vec center = this.center();
-            int count = this.hull.length;
+            int count = this.hull.size();
 
             renderer.begin(ShapeRenderer.ShapeType.Line);
             renderer.setColor(Color.RED);
 
             for (int i = 0; i < count; i++) {
                 int j = (i == 0) ? count - 1 : i - 1;
-                Vec a = this.hull[i].getPos();
-                Vec b = this.hull[j].getPos();
+                Vec a = this.hull.get(i).getPos();
+                Vec b = this.hull.get(j).getPos();
 
                 Vec edge = Sub(b, a);
                 Vec mid = Mul(Add(a, b), 0.5);
@@ -213,19 +215,19 @@ public class Utils{
             renderer.end();
         }
 
-        private void pop(ArrayList<Entity> list) {
+        private void pop(ArrayList<T> list) {
             list.remove(list.size() - 1);
         }
 
-        public Entity[] update(Entity[] shape) {
-            Entity[] sortedShape = shape.clone();
+        public List<T> update(T[] shape) {
+            T[] sortedShape = shape.clone();
 
             Arrays.sort(sortedShape, (a,b) -> {
                 return (a.getPos().x != b.getPos().x) ? Double.compare(a.getPos().x, b.getPos().x) : Double.compare(a.getPos().y, b.getPos().y);
             });
 
-            ArrayList<Entity> bottom = new ArrayList<>();
-            ArrayList<Entity> top = new ArrayList<>();
+            ArrayList<T> bottom = new ArrayList<>();
+            ArrayList<T> top = new ArrayList<>();
 
             for (int i = 0; i < sortedShape.length; i++) {
                 if (bottom.size() < 3) {
@@ -253,25 +255,25 @@ public class Utils{
             top.remove(top.size() - 1);
             bottom.addAll(top);
             
-            return bottom.toArray(new Entity[0]);
+            return bottom;
         }   
         public Vec center() {
             Vec v = N();
-            for (Entity vert : this.hull) {
+            for (T vert : this.hull) {
                 v = Add(v, vert.getPos());
             }
-            return Div(v, this.hull.length);
+            return Div(v, this.hull.size());
         }
-        public Vec PIP(Entity v)  {
+        public Vec PIP(T v)  {
             Vec mtv = null;
             double MP = Double.MAX_VALUE;
 
-            int count = this.hull.length;
+            int count = this.hull.size();
  
             for (int i = 0; i < count; i++ ) {
                 int j = (i == 0) ? count - 1 : i - 1;
-                Vec a = this.hull[i].getPos();
-                Vec b = this.hull[j].getPos();
+                Vec a = this.hull.get(i).getPos();
+                Vec b = this.hull.get(j).getPos();
 
                 Vec edge = Sub(b, a);
 
@@ -287,7 +289,7 @@ public class Utils{
                 double minP = Double.MAX_VALUE;
                 double maxP = -Double.MAX_VALUE;
 
-                for (Entity vert : this.hull) {
+                for (T vert : this.hull) {
                     double proj = Dot(vert.getPos(), norm);
                     minP = Math.min(minP, proj);
                     maxP = Math.max(maxP, proj);
@@ -377,33 +379,33 @@ public class Utils{
     
 
     public void DrawCircs() {
-        for (Entity i : this.points) {
+        for (T i : this.points) {
             if (i.getRad() != null) i.Draw(rend);
         }
     }
 
-    public void Insert(Entity v) {
+    public void Insert(T v) {
         points.add(v);
         master.AddQuad(points.get(points.size()-1));
     }
 
     public void Refresh() {
-        Iterator<Entity> it = points.iterator();
-        ArrayList<Quadtree> cull = new ArrayList<>();
+        Iterator<T> it = points.iterator();
+        ArrayList<Quadtree<T>> cull = new ArrayList<>();
         while (it.hasNext()) {
-            Entity start = it.next();
+            T start = it.next();
 
-            Quadtree parent = start.getPar();
+            Quadtree<T> parent = start.getPar();
             if (parent == null) {System.out.println("orphan"); continue;} 
             
             parent.Vecs.remove(start);
             master.AddQuad(start);
             int total = 0;
             if (parent != null && parent.Parent != null) {
-                Quadtree[] siblings = parent.Parent.children;
+                List<Quadtree<T>> siblings = parent.Parent.children;
                 if (siblings == null) continue;
                 // do stuff
-                for (Quadtree child : siblings) {
+                for (Quadtree<T> child : siblings) {
                     if (child == null) continue;
                     if (child.Vecs != null) {
                         total += child.Vecs.size();
@@ -418,47 +420,47 @@ public class Utils{
                 
             
         }
-        Cull(cull.toArray(new Quadtree[0]));
+        Cull(cull);
     }
 
-    public void Cull(Quadtree[] layers) {
-        for (Quadtree Q : layers) {
+    public void Cull(List<Quadtree<T>> layers) {
+        for (Quadtree<T> Q : layers) {
             if (Q.children == null) continue;
-            for (Quadtree child : Q.children) {
+            for (Quadtree<T> child : Q.children) {
                 if (child == null) continue;
                 for (int i = 0; i < child.Vecs.size(); i++) {
                     Q.Vecs.add(child.Vecs.get(i));
                     child.Vecs.get(i).setPar(Q);
                 }
             }
-            Q.children = new Quadtree[4];
+            Q.children.clear();;
             Q.isLeaf = true;
         }
     }
     
     public void ScreenResize(Vec br) {
-        master = new Quadtree(null, N(), br, max);
+        master = new Quadtree<T>(null, N(), br, max, this);
         for (int i  = 0; i < points.size(); i++) {
             master.AddQuad(points.get(i));
         }
     }
 
-    public Entity[] BroadSearch(Vec p1, Vec p2) {
-        Quadtree[] valid = master.ValidQuadrants(p1, p2).toArray(new Quadtree[0]);
-        ArrayList<Entity> found = new ArrayList<>();
-        for (Quadtree grid : valid) {
-            for (Entity e : grid.Vecs) {
+    public List<T> BroadSearch(Vec p1, Vec p2) {
+        List<Quadtree<T>> valid = master.ValidQuadrants(p1, p2);
+        ArrayList<T> found = new ArrayList<>();
+        for (Quadtree<T> grid : valid) {
+            for (T e : grid.Vecs) {
                 found.add(e);
             }
         }
-        return found.toArray(new Entity[0]);
+        return found;
     }
 
-    public Entity[] CircleSearch(Entity e) {
-        Quadtree[] valid = master.ValidQuadrants(e).toArray(new Quadtree[0]);
-        ArrayList<Entity> found = new ArrayList<>();
-        for (Quadtree grid : valid) {
-            for (Entity p : grid.Vecs) {
+    public List<T> CircleSearch(T e) {
+        List<Quadtree<T>> valid = master.ValidQuadrants(e);
+        ArrayList<T> found = new ArrayList<>();
+        for (Quadtree<T> grid : valid) {
+            for (T p : grid.Vecs) {
                 Vec d = Sub(e.getPos(), p.getPos());
                 double tr = e.getRad() + p.getRad();
 
@@ -467,16 +469,16 @@ public class Utils{
                 }
             }
         }
-        return found.toArray(new Entity[0]);
+        return found;
     }
     
 
 
-    public interface Entity {
+    public interface Entity<T extends Entity<T>> {
         public Vec getPos();
         public Double getRad();
-        public Quadtree getPar();
-        public void setPar(Quadtree par);
+        public Utils.Quadtree<T> getPar();
+        public void setPar(Utils.Quadtree<T> par);
 
         default void Draw(ShapeRenderer renderer) {
             Double r = getRad();
@@ -491,41 +493,43 @@ public class Utils{
         }
     }
 
-    public class Quadtree {
+    public static class Quadtree<T extends Entity<T>> {
         int size;
         int max;
-        Quadtree Parent;
+        Quadtree<T> Parent;
         Vec b1, b2;
         boolean isLeaf = true;
         Vec dif;
-        ArrayList<Entity> Vecs = new ArrayList<>();
-        Quadtree[] children = new Quadtree[4];
+        ArrayList<T> Vecs = new ArrayList<>();
+        List<Quadtree<T>> children = new ArrayList<>(4);
+        Utils<T> Vec2;
 
-        public Quadtree(Quadtree parent, Vec topLeft, Vec bottomRight, int max ) {
+        public Quadtree(Quadtree<T> parent, Vec topLeft, Vec bottomRight, int max, Utils<T> u) {
+            this.Vec2 = u;
             this.Parent = parent;
             this.b1 = topLeft;
             this.b2 = bottomRight;
-            this.dif = Sub(this.b2, this.b1);
+            this.dif = this.Vec2.Sub(this.b2, this.b1);
             this.max = max;
         }
 
-        public void AddQuad(Entity v) {
+        public void AddQuad(T v) {
             if (this.isLeaf) {
                 v.setPar(this);
                 Vecs.add(v);
                 if (Vecs.size() > this.max) {
-                    Entity[] old = Vecs.toArray(new Entity[0]);
+                    List<T> old = Vecs;
                     Vecs = new ArrayList<>();
                     subdivide();
-                    for (int i = 0; i < old.length; i++) {
-                        this.AddQuad(old[i]);
+                    for (int i = 0; i < old.size(); i++) {
+                        this.AddQuad(old.get(i));
                     }
                     this.isLeaf = false;
                 }
             } else {
                 boolean Added = false;
                 for (int i = 0; i < 4 && !Added; i++) {
-                    Quadtree Child = this.children[i];
+                    Quadtree<T> Child = this.children.get(i);
 
                     if (Child.Contains(v)) {
                         Child.AddQuad(v);
@@ -537,15 +541,15 @@ public class Utils{
             }
         }
 
-        public boolean Contains(Entity v) {
-            return (LessThan(v.getPos(), this.b2) && (MoreThan(v.getPos(), this.b1) || Eq(v.getPos(), this.b1))) ? true : false;
+        public boolean Contains(T v) {
+            return (this.Vec2.LessThan(v.getPos(), this.b2) && (this.Vec2.MoreThan(v.getPos(), this.b1) || this.Vec2.Eq(v.getPos(), this.b1))) ? true : false;
         }
 
         private boolean overlaps(Vec p1, Vec p2) {
             return !(p2.x < this.b1.x || p1.x > this.b2.x || p2.y < this.b1.y || p1.y > this.b2.y);
         }
 
-        public boolean overlaps(Entity e) {
+        public boolean overlaps(T e) {
             if (e.getRad() == null) {
                 System.out.println("failed");
                 return false;
@@ -559,9 +563,9 @@ public class Utils{
             double clampedY = Math.max(minY, Math.min(e.getPos().y, maxY));
             Vec n = new Vec(clampedX, clampedY);
 
-            Vec d = Sub(e.getPos(), n);
-            System.out.println(Len2(d) <= e.getRad() * e.getRad());
-            return Len2(d) <= e.getRad() * e.getRad();
+            Vec d = this.Vec2.Sub(e.getPos(), n);
+            System.out.println(this.Vec2.Len2(d) <= e.getRad() * e.getRad());
+            return this.Vec2.Len2(d) <= e.getRad() * e.getRad();
         }
 
 
@@ -569,64 +573,63 @@ public class Utils{
             
             rend.begin(ShapeRenderer.ShapeType.Line);
             
-            Vec t = Sub(b2, b1);
+            Vec t = this.Vec2.Sub(b2, b1);
             rend.setColor(Color.BLUE);
             rend.rect((float)this.b1.x, (float)this.b1.y,(float) t.x, (float)t.y);
             rend.end();
             if (!this.isLeaf) {
                 for (int i = 0; i <  4; i++) {
-                    this.children[i].Draw(rend);
+                    this.children.get(i).Draw(rend);
                 }
             }
         }
+
         public void subdivide() {
             this.isLeaf = false;
-            Vec mid = Div(Sub(b2, b1), 2);
-            Vec midPoint = Add(b1, mid);
+            Vec mid = this.Vec2.Div(this.Vec2.Sub(b2, b1), 2);
+            Vec midPoint = this.Vec2.Add(b1, mid);
 
-            this.children = new Quadtree[] {
-                // Top-left
-                new Quadtree(this, b1, midPoint, max),
+            this.children.clear();
+            this.children.addAll(List.of(new Quadtree<T>(this, b1, midPoint, max, this.Vec2),
 
                 // Top-right
-                new Quadtree(this, new Vec(midPoint.x, b1.y), new Vec(b2.x, midPoint.y), max),
+                new Quadtree<T>(this, new Vec(midPoint.x, b1.y), new Vec(b2.x, midPoint.y), max,this.Vec2),
 
                 // Bottom-left
-                new Quadtree(this, new Vec(b1.x, midPoint.y), new Vec(midPoint.x, b2.y), max),
+                new Quadtree<T>(this, new Vec(b1.x, midPoint.y), new Vec(midPoint.x, b2.y), max,this.Vec2),
 
                 // Bottom-right
-                new Quadtree(this, midPoint, b2, max)
-            };
+                new Quadtree<T>(this, midPoint, b2, max,this.Vec2)));
         }
-        public ArrayList<Quadtree> ValidQuadrants(Vec p1, Vec p2) {
-            Vec dif = Sub(p2, p1);
-            ArrayList<Quadtree> valid = new ArrayList<>();
+        public ArrayList<Quadtree<T>> ValidQuadrants(Vec p1, Vec p2) {
+            Vec dif = this.Vec2.Sub(p2, p1);
+            ArrayList<Quadtree<T>> valid = new ArrayList<>();
             return ValidQuadrants(p1,p2,dif,valid);
         }
-        public ArrayList<Quadtree> ValidQuadrants(Vec p1, Vec p2, Vec dif, ArrayList<Quadtree> current) {
+        public ArrayList<Quadtree<T>> ValidQuadrants(Vec p1, Vec p2, Vec dif, ArrayList<Quadtree<T>> current) {
             if (!overlaps(p1, p2)) return current;
 
             if (this.isLeaf) {
                 current.add(this);
             } else {
-                for (Quadtree child : children) {
+                for (Quadtree<T> child : children) {
                     child.ValidQuadrants(p1, p2, dif, current);
                 }
             }
             return current;
         }
-        public ArrayList<Quadtree> ValidQuadrants(Entity e) {
-            ArrayList<Quadtree> valid = new ArrayList<>();
+        public ArrayList<Quadtree<T>> ValidQuadrants(T e) {
+            ArrayList<Quadtree<T>> valid = new ArrayList<>();
             return ValidQuadrants(e,valid);
         }
 
-        public ArrayList<Quadtree> ValidQuadrants(Entity e, ArrayList<Quadtree> current) {
+        public ArrayList<Quadtree<T>> ValidQuadrants(T e, ArrayList<Quadtree<T>> current) {
             if (this.overlaps(e) == false) { return current;}
 
             if (this.isLeaf) {
                 current.add(this);
             } else {
-                for (Quadtree child : children) {
+                for (Quadtree<T> child : children) {
                     child.ValidQuadrants(e, current);
                 }
             }
